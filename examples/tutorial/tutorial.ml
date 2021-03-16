@@ -1,5 +1,6 @@
 open Core
 open Snarky
+open Snark
 
 (* Welcome!
 
@@ -8,58 +9,60 @@ open Snarky
    TODO: Explanation of R1CSs, how it makes addition and scalar mult 'free' but
    multiplication of variables costs 1.
 *)
-(* 0. First we instantiate Snarky with a 'backend' *)
-module Impl = Snark.Make (Backends.Bn128.Default)
-open Impl
+(* First we instantiate Snarky with a 'backend' *)
+module M = Run.Make (Backends.Bn128.Default)
+open M
 
-(* 1. There is a monad called 'Checked'. It has an extra type parameter but let's
-  ignore that for now *)
-
-let _foo () : (unit, _) Checked.t = Checked.return ()
-
-(* The point of this monad is to describe "checked computations"
+(* In snarky, we write "checked computations",
    which are computations that may "request" values from their environment,
    and make assertions about values that arise in the computation.
 
-   You "run" Checked.t's in two ways:
+   You "run" checked computations in two ways:
    1. To generate a constraint system for the SNARK
    2. To generate proofs.
 
    We'll see exactly how this works later.
 
-   First let's understand "field var"s which are the main primitive type we
-   have access to in Checked.t's.
+   First let's understand the type Field.t, which is the main primitive type we
+   have access to in snarky.
 *)
-(* A [Field.t] represents an element of the finite field of order [Field.size]
+(* A [Field.Constant.t] represents an element of the finite field of order [Field.Constant.size]
    It is a prime order field so you can think about it as "integers mod Field.size".
 *)
 
 let () =
+<<<<<<< HEAD
   let x = Field.of_int 23 in
   let x_cubed = Field.mul x (Field.square x) in
   let z = Field.(x_cubed / x) in
   assert (Field.equal z (Field.square x))
+=======
+  let x = Field.Constant.of_int 23 in
+  let x_cubed = Field.Constant.mul x (Field.Constant.square x) in
+  let z = Field.Constant.Infix.(x_cubed / x) in
+  assert (Field.Constant.equal z (Field.Constant.square x))
+>>>>>>> a30ccc1e4... rewrite the tutorial to not use monads
 
-(* Try seeing what operations there are in the [Field] module by using
+(* Try seeing what operations there are in the [Field.Constant] module by using
    your editor's auto-completion feature
 *)
-(* Inside Checked.t's we work with "Field.var"s. These are sort of like
+(* Inside snarky functions we work with "Field.var"s. These are sort of like
    Field.t's but we can make assertions about them.
 
-   Field.Checked provides "Checked" versions of the usual field operations.
+   Field provides "checked" versions of the usual field operations.
 *)
-(* [assert_equal : Field.var -> Field.var -> (unit, _) Checked.t] lets us
+(* [Field.Assert.equal : Field.t -> Field.t -> unit] lets us
    make an assertion that two field elements are equal.
 
    Here we assert that [x] is a square root of 9.
 *)
-let assert_is_square_root_of_9 (x : Field.Var.t) : (unit, _) Checked.t =
-  let%bind x_squared = Field.Checked.mul x x in
-  Field.Checked.Assert.equal x_squared (Field.Var.constant (Field.of_int 9))
+let assert_is_square_root_of_9 (x : Field.t) : unit =
+  let x_squared = Field.mul x x in
+  Field.Assert.equal x_squared Field.(constant (Constant.of_int 9))
 
 (* Exercise 1:
    Write a function
-   [assert_is_cube_root_of_1 : Field.var -> (unit, _) Checked.t]
+   [assert_is_cube_root_of_1 : Field.t -> unit]
    that asserts its argument is a cube root of 1.
 
    Aside:
@@ -78,13 +81,18 @@ let assert_is_square_root_of_9 (x : Field.Var.t) : (unit, _) Checked.t =
    be two additional cube roots of 1.
 *)
 (* In this field, it happens to be the case that -3 is a square. *)
-let () = assert (Field.is_square (Field.of_int (-3)))
+let () = assert (Field.Constant.(is_square (of_int (-3))))
 
-let assert_is_cube_root_of_1 (x : Field.Var.t) = failwith "Exercise 1"
+let assert_is_cube_root_of_1 (x : Field.t) = failwith "Exercise 1"
 
 let cube_root_of_1 =
+<<<<<<< HEAD
   let open Field in
   (of_int (-1) + sqrt (of_int (-3))) / of_int 2
+=======
+  let open Field.Constant in
+  Infix.((of_int (-1) + sqrt (of_int (-3))) / of_int 2)
+>>>>>>> a30ccc1e4... rewrite the tutorial to not use monads
 
 let exercise1 () =
   (* Before we generate a constraint system or a proof for our checked
@@ -107,12 +115,14 @@ let exercise1 () =
      words, there exists some cube_root_of_1.
    *)
   let proof =
-    prove (Keypair.pk keypair) (input ()) () assert_is_cube_root_of_1
+    prove (Keypair.pk keypair) (input ()) assert_is_cube_root_of_1
       cube_root_of_1
   in
   (* We can verify a proof as follows *)
   let is_valid = verify proof (Keypair.vk keypair) (input ()) cube_root_of_1 in
-  printf !"is %{sexp:Field.t} a cube root of 1? %b\n%!" cube_root_of_1 is_valid
+  printf
+    !"is %{sexp:Field.Constant.t} a cube root of 1? %b\n%!"
+    cube_root_of_1 is_valid
 
 (* Exercise 1: Comment this out when you're ready to test it! *)
 (* let () = exercise1 () *)
@@ -120,10 +130,9 @@ let exercise1 () =
 let exercise2 () =
   (* Now let's prove that there are two cube roots of 1. *)
   let distinct_cube_roots_of_1 x y =
-    let%map () = assert_is_cube_root_of_1 x
-    and () = assert_is_cube_root_of_1 y
-    and () = Field.Checked.Assert.not_equal x y in
-    ()
+    assert_is_cube_root_of_1 x ;
+    assert_is_cube_root_of_1 y ;
+    Field.Assert.not_equal x y
   in
   (* Exercise 2:
      Now you try: Creating a data spec, keypair, proof, and verifying that proof
@@ -135,7 +144,8 @@ let exercise2 () =
   let proof = failwith "Exercise 2: Proof" in
   let is_valid = failwith "Exercise 2: Verify" in
   printf
-    !"Are %{sexp:Field.t} and %{sexp:Field.t} two distinct cube roots of 1? %b\n\
+    !"Are %{sexp:Field.Constant.t} and %{sexp:Field.Constant.t} two distinct \
+      cube roots of 1? %b\n\
       %!"
     cube_root_of_1 another_cube_root_of_1 is_valid
 
@@ -155,35 +165,40 @@ let exercise2 () =
    This is also an example of a Checked computation that doesn't return unit!
 *)
 let ifeqxy_x_else_z x y z =
-  let%bind b = Field.Checked.equal x y in
-  Field.Checked.if_ b ~then_:x ~else_:z
+  let b = Field.equal x y in
+  Field.if_ b ~then_:x ~else_:z
 
 (* We can combine booleans in the usual ways: `a && b` for 'and', `a || b`
    for 'or'.
 *)
 let if_both x y a b =
-  let%bind x_and_y = Boolean.(x && y) in
-  Field.Checked.if_ x_and_y ~then_:a ~else_:b
+  let x_and_y = Boolean.(x && y) in
+  Field.if_ x_and_y ~then_:a ~else_:b
 
 (* Exercise 3:
    Write a function
-   [zero_or_inverse : Field.var -> (Field.var, _) Checked.t]
+   [zero_or_inverse : Field.t -> Field.t]
    that returns zero if the input is zero, or the inverse of the input
    otherwise.
 *)
-let zero_or_inverse (x : Field.Var.t) = failwith "Exercise 3"
+let zero_or_inverse (x : Field.t) = failwith "Exercise 3"
 
 let exercise3 () =
   (* Unchecked reference implementation. *)
   let zero_or_inverse_unchecked x =
+<<<<<<< HEAD
     let b = Field.equal x Field.zero in
     let invertable = if b then Field.one else x in
     if b then x else Field.inv invertable
+=======
+    if Field.Constant.equal x Field.Constant.zero then x
+    else Field.Constant.inv x
+>>>>>>> a30ccc1e4... rewrite the tutorial to not use monads
   in
   (* Check the value matches [expected_value]. *)
   let matches_unchecked x expected_value =
-    let%bind y = zero_or_inverse x in
-    Field.Checked.Assert.equal y expected_value
+    let y = zero_or_inverse x in
+    Field.Assert.equal y expected_value
   in
   let input () = failwith "Exercise 3: Data_spec here" in
   let keypair = failwith "Exercise 3: Keypair here" in
@@ -191,9 +206,9 @@ let exercise3 () =
     prove (Keypair.pk keypair) (input ()) () matches_unchecked x
       (zero_or_inverse_unchecked x)
   in
-  let proof_0 = proof Field.zero in
-  let proof_1 = proof Field.one in
-  let proof_15 = proof (Field.of_int 15) in
+  let proof_0 = proof Field.Constant.zero in
+  let proof_1 = proof Field.Constant.one in
+  let proof_15 = proof (Field.Constant.of_int 15) in
   let is_valid_0 = failwith "Exercise 3: Verify proof_0" in
   let is_valid_1 = failwith "Exercise 3: Verify proof_1" in
   let is_valid_15 = failwith "Exercise 3: Verify proof_15" in
@@ -219,7 +234,7 @@ let exercise3 () =
 *)
 let exercise4 () =
   let either x y =
-    let%bind z = Boolean.(x && y) in
+    let z = Boolean.(x && y) in
     Boolean.Assert.is_true z
   in
   let input () = failwith "Exercise 4: Data_spec here" in
@@ -249,12 +264,20 @@ let exercise4 () =
    functions over lists!
 *)
 
+<<<<<<< HEAD
 let product (l : Field.Var.t list) : (Field.Var.t, _) Checked.t =
   failwith "Exercise 5"
 
 let product_equals (l : Field.Var.t list) (expected_total : Field.Var.t) =
   let%bind total = product l in
   Field.Checked.Assert.equal total expected_total
+=======
+let sum (l : Field.t list) : Field.t = failwith "Exercise 5"
+
+let sum_equals (l : Field.t list) (expected_total : Field.t) =
+  let total = sum l in
+  Field.Assert.equal total expected_total
+>>>>>>> a30ccc1e4... rewrite the tutorial to not use monads
 
 let product_unchecked (l : Field.t list) =
   List.fold ~init:Field.one ~f:Field.mul l
@@ -279,8 +302,15 @@ let exercise5 () =
    [product_triple] below.
 *)
 
+<<<<<<< HEAD
 let product_triple ((x, y, z) : Field.t * Field.t * Field.t) : Field.t =
   Field.(x * y * z)
+=======
+let add_triple
+    ((x, y, z) : Field.Constant.t * Field.Constant.t * Field.Constant.t) :
+    Field.Constant.t =
+  Field.Constant.Infix.(x + y + z)
+>>>>>>> a30ccc1e4... rewrite the tutorial to not use monads
 
 let exercise6 () = failwith "Exercise 6"
 
@@ -311,6 +341,7 @@ let exercise6 () = failwith "Exercise 6"
    result from [product_unchecked].
 *)
 
+<<<<<<< HEAD
 let product (l : Field.Var.t list) : (Field.Var.t, _) Checked.t =
   failwith "Exercise 7"
 
@@ -322,19 +353,38 @@ let product_equals (l : Field.Var.t list) =
   let%bind expected_total =
     exists Field.typ
       ~compute:
+=======
+let sum (l : Field.t list) : Field.t = failwith "Exercise 7"
+
+let sum_unchecked (l : Field.Constant.t list) =
+  List.fold ~init:Field.Constant.zero ~f:Field.Constant.add l
+
+let sum_equals (l : Field.t list) =
+  let total = sum l in
+  let expected_total =
+    exists Field.typ ~compute:(fun () ->
+>>>>>>> a30ccc1e4... rewrite the tutorial to not use monads
         As_prover.(
           (* Everything in this block is run 'as the prover'.
 
              This means that we have special powers, like reading the values
              from our checked computation back into normal OCaml values.
           *)
+<<<<<<< HEAD
           let%map l = read (Typ.list ~length:(List.length l) Field.typ) l in
           (* Now we have l back as a [Field.t list], so we can call
              [product_unchecked] on it.
           *)
           product_unchecked l)
+=======
+          let l = read (Typ.list ~length:(List.length l) Field.typ) l in
+          (* Now we have l back as a [Field.t list], so we can call [sum_unchecked]
+             on it.
+          *)
+          sum_unchecked l) )
+>>>>>>> a30ccc1e4... rewrite the tutorial to not use monads
   in
-  Field.Checked.Assert.equal total expected_total
+  Field.Assert.equal total expected_total
 
 let exercise7 () =
   let input () = failwith "Exercise 7: Data_spec here" in
@@ -342,7 +392,7 @@ let exercise7 () =
   let proof l = failwith "Exercise 7: Proof" in
   let is_valid proof l = failwith "Exercise 7: Verify" in
   let proved (l : int list) =
-    let l : Field.t list = List.map ~f:Field.of_int l in
+    let l : Field.Constant.t list = List.map ~f:Field.Constant.of_int l in
     is_valid (proof l) l
   in
   printf
@@ -374,11 +424,11 @@ let exercise7 () =
 *)
 type _ Request.t += Choose_two_from_list : 'a list -> ('a * 'a) Request.t
 
-let in_list (x : Field.Var.t) (l : Field.Var.t list) =
+let in_list (x : Field.t) (l : Field.t list) =
   (* Assert that x is equal to one of the values in l. *)
   failwith "Exercise 8"
 
-let choose_two_from_list (l : Field.Var.t list) =
+let choose_two_from_list (l : Field.t list) =
   exists
     Typ.(Field.typ * Field.typ)
     ~request:
@@ -387,11 +437,11 @@ let choose_two_from_list (l : Field.Var.t list) =
            with them. *)
         failwith "Exercise 8")
 
-let chosen_two_different (l : Field.Var.t list) =
-  let%bind choice1, choice2 = choose_two_from_list l in
-  let%bind () = in_list choice1 l in
-  let%bind () = in_list choice2 l in
-  Field.Checked.Assert.not_equal choice1 choice2
+let chosen_two_different (l : Field.t list) =
+  let choice1, choice2 = choose_two_from_list l in
+  in_list choice1 l ;
+  in_list choice2 l ;
+  Field.Assert.not_equal choice1 choice2
 
 let exercise8 () =
   let input () = failwith "Exercise 8: Data_spec here" in
@@ -400,7 +450,9 @@ let exercise8 () =
   let secret2 = 3 in
   let handled_chosen_two_different l =
     (* Add a handler for our [Choose_two_from_list] request *)
-    handle (chosen_two_different l) (fun (With {request; respond}) ->
+    handle
+      (fun () -> chosen_two_different l)
+      (fun (With {request; respond}) ->
         match request with
         | Choose_two_from_list l ->
             let choice1 = List.nth_exn l secret1 in
@@ -455,15 +507,15 @@ module Exercise9 = struct
   end
 
   (* A Field is a ring *)
-  module Mat = Matrix (Field)
+  module Mat = Matrix (Field.Constant)
 
   (* We can multiply *)
   let a =
-    Field.
+    Field.Constant.
       [|[|of_int 1; of_int 2; of_int 3|]; [|of_int 4; of_int 5; of_int 6|]|]
 
   let b =
-    let open Field in
+    let open Field.Constant in
     [|[|of_int 1; of_int 2|]; [|of_int 3; of_int 4|]; [|of_int 5; of_int 6|]|]
 
   (* let () = printf !"Result %{sexp: Mat.t}\n%!" (Mat.mul a b) *)
@@ -484,18 +536,17 @@ module Exercise9 = struct
   let random_matrix () = failwith "Exercise 9: Random matrix"
 
   module Mat_checked = struct
-    type t = Field.Var.t array array
+    type t = Field.t array array
 
     (* Next, we need to make a checked version of [Matrix.mul] from above.
        This should feel familiar: we did a very similar thing when we were
        finding the product of a list!
      *)
-    let mul : t -> t -> (t, _) Checked.t =
-     fun a b -> failwith "Exercise 9: Write mul"
+    let mul : t -> t -> t = fun a b -> failwith "Exercise 9: Write mul"
 
     module Assert = struct
       (* Now, we want a way to say that two matrices are equal. *)
-      let equal : t -> t -> (unit, _) Checked.t =
+      let equal : t -> t -> unit =
        fun a b -> failwith "Exercise 9: Write Assert.equal"
     end
 
